@@ -1,0 +1,32 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/mnt/e/Desktop/FakeCoroutine/Coroutine.cpp
+Coroutine.h
+/mnt/e/Desktop/FakeCoroutine/Coroutine.h
+cstring
+-
+cassert
+-
+iostream
+-
+
+/mnt/e/Desktop/FakeCoroutine/Coroutine.h
+ucontext.h
+-
+memory
+-
+unordered_map
+-
+
+/mnt/e/Desktop/FakeCoroutine/main.cpp
+Coroutine.h
+/mnt/e/Desktop/FakeCoroutine/Coroutine.h
+iostream
+-
+
