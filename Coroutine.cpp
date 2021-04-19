@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <cassert>
+//#define DEBUG
 #ifdef DEBUG
 #include <iostream>
 #endif
@@ -25,7 +26,7 @@ Coroutine::Coroutine(CoroutineSchedule *schedule, CoroutineFunc func, void *args
 Coroutine::~Coroutine() {
   if (stack_) delete[] stack_;
 #ifdef DEBUG
-  std::cout<<"~Coroutine()"<<std::endl;
+  std::cout << "~Coroutine()" << std::endl;
 #endif
 }
 
@@ -91,7 +92,7 @@ void CoroutineSchedule::co_resume(CoroutineID id) {
 	   */
 	  auto ptr = (uintptr_t)this;
 	  makecontext(&cp->ctx_, (void (*)())mainFunc,
-			   2, (uint32_t)ptr, (uint32_t)(ptr >> 32));
+				  2, (uint32_t)ptr, (uint32_t)(ptr >> 32));
 	  // 保存主协程的用户上下文到this->main_中，换入次协程cp的用户上下文，转而执行次协程的函数
 	  swapcontext(&this->main_, &cp->ctx_);
 	  break;
@@ -107,6 +108,10 @@ void CoroutineSchedule::co_resume(CoroutineID id) {
 	  assert(false);
 	}
   }
+#ifdef DEBUG
+  std::cout << "coroutine shared_ptr use_count(): "
+			<< cp.use_count() << std::endl;
+#endif
 }
 
 static void save_stack(CoroutineSchedule::CoroutinePtr cp, char *top) {
@@ -159,9 +164,10 @@ void CoroutineSchedule::mainFunc(uint32_t low32, uint32_t high32) {
   CoroutineID id = schedule->running_;
   auto cp = schedule->map_[id];
   cp->func_(schedule, cp->args_);
-  // 不是协程对象销毁了吗？cp->ctx_销毁了不也应该销毁了cp->ctx_->uc_link吗？
-  // 这可能就是swapcontext()的约定吧？当newctx指定的函数执行完毕了，它就会自动
-  // 恢复到oldctx用户上下文。
   schedule->map_.erase(id);
   schedule->running_ = -1;
+  // 到这个位置协程对象的共享指针为2，其中一个很显然就是当前函数中的共享指针cp，
+  // 另一个共享指针位于co_resume()成员函数中！所以这个函数结束后可以安全的
+  // 切回主协程。当离开这个函数后，引用计数为1，当主协程离开co_resume()函数
+  // 后引用计数变为0，此时才自动析构协程对象。
 }
