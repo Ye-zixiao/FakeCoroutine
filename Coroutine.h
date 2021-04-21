@@ -53,6 +53,11 @@ class CoroutineSchedule {
   CoroutineSchedule();
   ~CoroutineSchedule();
 
+  CoroutineSchedule(const CoroutineSchedule &) = delete;
+  CoroutineSchedule &operator=(CoroutineSchedule &) = delete;
+
+  // 有必要设置移动接口吗？
+
   CoroutineID co_create(CoroutineFunc func, void *args);
   void co_resume(CoroutineID id);
   void co_yield();

@@ -3,19 +3,41 @@
 
 #include "Coroutine.h"
 #include <iostream>
+#include <queue>
 
 using namespace std;
 using namespace fc;
 
+constexpr int kLOOPTIMES = 100;
+
 /***
- * 协程函数
+ * 生产者协程
  * @param schedule
  * @param args
  */
-void coFunc(CoroutineSchedule *schedule, void *args) {
-  int *init = static_cast<int *>(args);
-  for (int i = 0; i < 5; ++i) {
-	printf("coroutine %d: %d\n", schedule->co_runningID(), *init + i);
+void coProducer(CoroutineSchedule *schedule, void *args) {
+  auto *unBlockingQueue = static_cast<queue<int> *>(args);
+  int start = 100;
+
+  for (int i = 0; i < kLOOPTIMES; ++i) {
+	unBlockingQueue->push(i + start);
+	cout << "producer push " << i + start << endl;
+	schedule->co_yield();
+  }
+}
+
+/***
+ * 消费者协程
+ * @param schedule
+ * @param args
+ */
+void coConsumer(CoroutineSchedule *schedule, void *args) {
+  auto unBlockingQueue = static_cast<queue<int> *>(args);
+
+  for (int i = 0; i < kLOOPTIMES; ++i) {
+	auto thing = unBlockingQueue->front();
+	unBlockingQueue->pop();
+	cout << "consumer pop " << thing << endl;
 	schedule->co_yield();
   }
 }
@@ -23,25 +45,27 @@ void coFunc(CoroutineSchedule *schedule, void *args) {
 /***
  * 协程测试函数
  * @param schedule
+ * @param unBlockingQueue
  */
-void testFunc(CoroutineSchedule &schedule) {
-  int init1 = 0, init2 = 100;
+void testFunc1(CoroutineSchedule &schedule, queue<int> &unBlockingQueue) {
+  // 创建协程对象，并返回协程对象ID
+  auto producer = schedule.co_create(coProducer, &unBlockingQueue);
+  auto consumer = schedule.co_create(coConsumer, &unBlockingQueue);
 
-  auto co1 = schedule.co_create(coFunc, &init1);
-  auto co2 = schedule.co_create(coFunc, &init2);
   cout << "main coroutine start" << endl;
-  while (schedule.co_status(co1) && schedule.co_status(co2)) {
-	// 启动或调度到协程1
-	schedule.co_resume(co1);
-	// 启动或调度到协程2
-	schedule.co_resume(co2);
-	// 此处回到主协程
+  while (schedule.co_status(producer) && schedule.co_status(consumer)) {
+    // 启动/调度到生产者协程
+	schedule.co_resume(producer);
+	// 启动/调度到消费者协程
+	schedule.co_resume(consumer);
+	// 恢复到主协程
   }
   cout << "main coroutine end" << endl;
 }
 
 int main() {
   CoroutineSchedule schedule;
-  testFunc(schedule);
+  queue<int> unBlockingQueue;
+  testFunc1(schedule, unBlockingQueue);
   return 0;
 }
