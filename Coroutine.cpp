@@ -13,15 +13,17 @@
 
 using namespace fc;
 
-Coroutine::Coroutine(CoroutineSchedule *schedule, CoroutineFunc func, void *args)
-	: schedule_(schedule),
-	  ctx_{},
-	  size_(0),
-	  cap_(0),
-	  stack_(nullptr),
-	  status_(kCOROUTINE_READY),
-	  func_(func),
-	  args_(args) {}
+Coroutine::Coroutine(CoroutineSchedule *schedule,
+                     CoroutineFunc func,
+                     void *args)
+    : schedule_(schedule),
+      ctx_{},
+      size_(0),
+      cap_(0),
+      stack_(nullptr),
+      status_(kCOROUTINE_READY),
+      func_(func),
+      args_(args) {}
 
 Coroutine::~Coroutine() {
   if (stack_) delete[] stack_;
@@ -31,11 +33,11 @@ Coroutine::~Coroutine() {
 }
 
 CoroutineSchedule::CoroutineSchedule() :
-	stack_{},
-	map_(),
-	running_(-1),
-	main_{},
-	nco_(0) {}
+    stack_{},
+    map_(),
+    running_(-1),
+    main_{},
+    nco_(0) {}
 
 CoroutineSchedule::~CoroutineSchedule() {
   map_.clear(); // 清理所有的协程对象
@@ -47,9 +49,9 @@ CoroutineSchedule::~CoroutineSchedule() {
  * @param args
  * @return
  */
-CoroutineSchedule::CoroutineID CoroutineSchedule::co_create(CoroutineFunc func, void *args) {
-  CoroutinePtr coroutine_ptr(
-	  std::make_shared<Coroutine>(this, func, args));
+CoroutineSchedule::CoroutineID CoroutineSchedule::co_create(CoroutineFunc func,
+                                                            void *args) {
+  CoroutinePtr coroutine_ptr(std::make_shared<Coroutine>(this, func, args));
   // 协程ID只会一直正向生长，其实在实际执行的时候前面的有些ID已经不再使用了，
   // 那么怎么重复使用它们？还是做个环回操作，当ID增长到kMAXID之后重新回到0
   // 以while找一个不再使用的协程ID？fix it！
@@ -60,57 +62,57 @@ CoroutineSchedule::CoroutineID CoroutineSchedule::co_create(CoroutineFunc func, 
 
 /***
  * 启动/恢复某一个指定的协程。若该协程失效，则不调度
- * @param id
+ * @param id 协程号
  */
 void CoroutineSchedule::co_resume(CoroutineID id) {
   if (map_.find(id) == map_.end())
-	return;
+    return;
 
   CoroutinePtr cp = map_[id];
   State state = cp->status_;
   switch (state) {
-	case kCOROUTINE_READY: {
-	  // 将一个新创建协程对象中的将要切换到用户上下文进行初始化。
-	  // cp->ctx_.uc_stack指定下面的swapcontext()在切换后会使用调度器中的共享栈，
-	  // ctx_.uc_link指定在协程函数执行完之后会返回到主协程中（this->main_记录了主
-	  // 协程的用户上下文）
-	  getcontext(&cp->ctx_);
-	  cp->ctx_.uc_stack.ss_sp = this->stack_;
-	  cp->ctx_.uc_stack.ss_size = kSTACKSIZE;
-	  cp->ctx_.uc_link = &this->main_;
-	  this->running_ = id;
-	  cp->status_ = kCOROUTINE_RUNNING;
+    case kCOROUTINE_READY: {
+      // 将一个新创建协程对象中的将要切换到用户上下文进行初始化。
+      // cp->ctx_.uc_stack指定下面的swapcontext()在切换后会使用调度器中的共享栈，
+      // ctx_.uc_link指定在协程函数执行完之后会返回到主协程中（this->main_记录了主
+      // 协程的用户上下文）
+      getcontext(&cp->ctx_);
+      cp->ctx_.uc_stack.ss_sp = this->stack_;
+      cp->ctx_.uc_stack.ss_size = kStackSize;
+      cp->ctx_.uc_link = &this->main_;
+      this->running_ = id;
+      cp->status_ = kCOROUTINE_RUNNING;
 
-	  /***
-	   * 由于makecontext()函数后面的函数变参列表只能为下面的mainFunc传递int类型的
-	   * 可变参，所以我们将64位的虚拟地址拆成两个32位的数，在调用mainFunc()的时候重新
-	   * 拼接即可。
-	   * 其中次协程在启动后会去执行mainFunc，而mainFunc会自动去执行用户传递的协程函数，
-	   * 在执行协程函数的时候，用户可以反复让出yield()CPU的控制权给别的协程。当这个协程
-	   * 函数执行完毕之后，mainFunc就会自动从调度器中的协程容器中删除这个协程对象，此时
-	   * 协程ID也就相应的失效了，用户不可能再恢复这个协程，即使调用了resume()也没什么用
-	   */
-	  auto ptr = (uintptr_t)this;
-	  makecontext(&cp->ctx_, (void (*)())mainFunc,
-				  2, (uint32_t)ptr, (uint32_t)(ptr >> 32));
-	  // 保存主协程的用户上下文到this->main_中，换入次协程cp的用户上下文，转而执行次协程的函数
-	  swapcontext(&this->main_, &cp->ctx_);
-	  break;
-	}
-	case kCOROUTINE_SUSPEND: {
-	  memcpy(this->stack_ + kSTACKSIZE - cp->size_, cp->stack_, cp->size_);
-	  this->running_ = id;
-	  cp->status_ = kCOROUTINE_RUNNING;
-	  swapcontext(&this->main_, &cp->ctx_);
-	  break;
-	}
-	default: {
-	  assert(false);
-	}
+      /***
+       * 由于makecontext()函数后面的函数变参列表只能为下面的mainFunc传递int类型的
+       * 可变参，所以我们将64位的虚拟地址拆成两个32位的数，在调用mainFunc()的时候重新
+       * 拼接即可。
+       * 其中次协程在启动后会去执行mainFunc，而mainFunc会自动去执行用户传递的协程函数，
+       * 在执行协程函数的时候，用户可以反复让出yield()CPU的控制权给别的协程。当这个协程
+       * 函数执行完毕之后，mainFunc就会自动从调度器中的协程容器中删除这个协程对象，此时
+       * 协程ID也就相应的失效了，用户不可能再恢复这个协程，即使调用了resume()也没什么用
+       */
+      auto ptr = (uintptr_t)this;
+      makecontext(&cp->ctx_, (void (*)())mainFunc,
+                  2, (uint32_t)ptr, (uint32_t)(ptr >> 32));
+      // 保存主协程的用户上下文到this->main_中，换入次协程cp的用户上下文，转而执行次协程的函数
+      swapcontext(&this->main_, &cp->ctx_);
+      break;
+    }
+    case kCOROUTINE_SUSPEND: {
+      memcpy(this->stack_ + kStackSize - cp->size_, cp->stack_, cp->size_);
+      this->running_ = id;
+      cp->status_ = kCOROUTINE_RUNNING;
+      swapcontext(&this->main_, &cp->ctx_);
+      break;
+    }
+    default: {
+      assert(false);
+    }
   }
 #ifdef DEBUG
   std::cout << "coroutine shared_ptr use_count(): "
-			<< cp.use_count() << std::endl;
+            << cp.use_count() << std::endl;
 #endif
 }
 
@@ -120,11 +122,11 @@ static void save_stack(CoroutineSchedule::CoroutinePtr cp, char *top) {
   // 如此我们就可以保存到协程对象自己管理的私有协程栈缓冲区中，如果
   // 协程对象中管理的缓冲区不够，则重新分配。
   char guard = 0;
-  assert(top - &guard <= CoroutineSchedule::kSTACKSIZE);
+  assert(top - &guard <= CoroutineSchedule::kStackSize);
   if (cp->cap_ < top - &guard) {
-	delete[] cp->stack_;
-	cp->cap_ = top - &guard;
-	cp->stack_ = new char[cp->cap_];
+    delete[] cp->stack_;
+    cp->cap_ = top - &guard;
+    cp->stack_ = new char[cp->cap_];
   }
   cp->size_ = top - &guard;
   memcpy(cp->stack_, &guard, cp->size_);
@@ -135,7 +137,7 @@ void CoroutineSchedule::co_yield() {
   assert(id >= 0);
 
   CoroutinePtr cp = map_[id];
-  save_stack(cp, stack_ + kSTACKSIZE);
+  save_stack(cp, stack_ + kStackSize);
   cp->status_ = kCOROUTINE_SUSPEND;
   running_ = -1;
   // 让出CPU控制权，换到主协程，由协程调度器来负责调度到下一个协程

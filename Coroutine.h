@@ -66,7 +66,7 @@ class CoroutineSchedule {
   State co_status(CoroutineID id);
 
  public:
-  constexpr static int kSTACKSIZE = 1024 * 1024;
+  constexpr static int kStackSize = 1024 * 1024;
 
  private:
   static void mainFunc(uint32_t low32, uint32_t high32);
@@ -74,7 +74,7 @@ class CoroutineSchedule {
  private:
   using CoroutineMap = std::unordered_map<CoroutineID, CoroutinePtr>;
 
-  char stack_[kSTACKSIZE];  // 各个协程公共使用的栈帧空间，不允许超过kSTACKSIZE大小
+  char stack_[kStackSize];  // 各个协程公共使用的栈帧空间，不允许超过kSTACKSIZE大小
   CoroutineMap map_;        // 协程容器，由协程调度类记录各个协程对象的指针
   CoroutineID running_;     // 正在执行的协程ID
   ucontext_t main_;         // 主协程的用户上下文，当次协程选择让出后会回到主协程，由它来负责调度到下个次协程
